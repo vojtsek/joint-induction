@@ -1,19 +1,23 @@
 import pickle
+import numpy
 
 from collections import Counter
 
 class Dataset:
-    def __init__(self, data=None, reader=None, saved_dialogues=None):
+    def __init__(self, data=None, reader=None, saved_dialogues=None, train=.8):
         if saved_dialogues is not None:
             with open(saved_dialogues, 'rb') as fd:
                 print('Loading data from "{}"'.format(saved_dialogues))
                 self.dialogues = pickle.load(fd)
+                self.length = len(self.dialogues)
         else:
             self.reader = reader
             self._parse_data(data)
+        self.train = train
 
     def _parse_data(self, data):
         self.dialogues = [d for d in self.reader.parse_dialogues(data)]
+        self.length = len(self.dialogues)
 
     def apply_to_dialogues(self, fun):
         for d in self.dialogues:
@@ -25,11 +29,24 @@ class Dataset:
             for turn in dialogue.turns:
                 fun(turn)
 
-    @property
-    def turns(self):
-        for d in self.dialogues:
+    def _turns(self, dials):
+        for d in dials:
             for t in d.turns:
                 yield t
+
+    @property
+    def turns(self):
+        return self._turns(self.dialogues)
+    
+    @property
+    def test_set(self):
+        train_size = round(self.train * self.length)
+        return self._turns(self.dialogues[train_size:])
+
+    @property
+    def train_set(self):
+        train_size = round(self.train * self.length)
+        return self._turns(self.dialogues[:train_size])
     
     def user_utterances(self):
         for t in self.turns:
@@ -128,7 +145,8 @@ class MultiWOZReader:
             turns = dial['log']
             for t in turns:
                 turn = Turn()
-                turn.add_user(t['text'])
+                text = t['text'].strip().replace('\n', ' ')
+                turn.add_user(text)
                 turn.add_system('dummy')
                 if not 'dialog_act' in t:
                     print('skipping')
@@ -158,6 +176,6 @@ class MultiWOZReader:
                 continue
             for s in val:
                 slot = Slot(s[0].lower(), s[1], intent)
-                usr_slu.append(slot)
+            usr_slu.append(slot)
         return usr_slu
 

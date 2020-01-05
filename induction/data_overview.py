@@ -37,6 +37,15 @@ if __name__ == '__main__':
     if args.output_type == 'user':
         for t in dataset.turns:
             print(get_turn_attribute(t, 'user'))
+            print([(s.name, s.intent) for s in get_turn_attribute(t, 'usr_slu')])
+    elif args.output_type == 'filter':
+        for d in dataset.dialogues:
+            for t in d.turns:
+                t.user = t.user.strip()
+                t.user = t.user.replace('\n', ' ')
+                print(get_turn_attribute(t, 'user'))
+        dataset.save_dialogues(args.data_fn)
+
     elif args.output_type == 'semantic':
         for t in sorted(dataset.turns, key=lambda t: len(t.user_semantic_parse_semafor)):
             print(t.user)

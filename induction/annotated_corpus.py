@@ -2,6 +2,7 @@ import itertools
 import pickle
 import functools
 import os
+import sys
 from collections import Counter
 import copy
 
@@ -66,16 +67,16 @@ class SemanticFrame:
         coherence = 2 * coherence / n if n > 1 else coherence
         self.coherence = coherence
     
-    def print(self):
+    def print(self, f=sys.stdout):
         score = self.score if hasattr(self, 'score') else 0
-        print('{0}\n\tcoherence:\t{1:.2f}\n\tinstances:\t{2}\n\tcount:\t\t{3}\n\tfrequency:\t{4}\n\torders:\t\t{5}\n\tscore:\t\t{6}'.format(self.name, self.coherence, list(self.pos_instances.items()), self.count, self.relative_frequency, self.orders, score))
-        print(self.dependencies.most_common(5))
-        print(self.heads.most_common(5))
+        print('{0}\n\tcoherence:\t{1:.2f}\n\tinstances:\t{2}\n\tcount:\t\t{3}\n\tfrequency:\t{4}\n\torders:\t\t{5}\n\tscore:\t\t{6}'.format(self.name, self.coherence, list(self.pos_instances.items()), self.count, self.relative_frequency, self.orders, score), file=f)
+        print(self.dependencies.most_common(5), file=f)
+        print(self.heads.most_common(5), file=f)
         for dep in self.frame_dependencies:
             ratio = self.frame_dependencies[dep] / self.count if self.count > 0 else 0
             if ratio > 0.5:
-                print(dep, ratio)
-        print(self.frame_dependencies.most_common(5))
+                print(dep, ratio, file=f)
+        print(self.frame_dependencies.most_common(5), file=f)
 
     def similarity(self, other, embeddings):
         if len(self.instances) == 0 or len(other.instances) == 0:
@@ -105,7 +106,7 @@ class AnnotatedCorpus:
         self.merged_frames = {}
         if data_fn is not None:
             with open(data_fn, 'rb') as inf:
-                self.frames_dict, self.raw_corpus, self.frame_corpus, self.selected_frames = pickle.load(inf)
+                self.frames_dict, self.raw_corpus, self.frame_corpus, self.selected_frames, self.merged_frames = pickle.load(inf)
 
     def _real_frame_name(self, name):
         name = name.lower()
@@ -270,11 +271,11 @@ class AnnotatedCorpus:
         for fr in self.frames_dict.values():
             fr.relative_frequency = fr.count / len(self.raw_corpus)
 
-    def frame_stats(self):
-        print('-'*80)
+    def frame_stats(self, of):
+        print('-'*80, file=of)
         for name, semframe in self.frames_dict.items():
-            semframe.print()
-        print('-'*80)
+            semframe.print(of)
+        print('-'*80, file=of)
     
     def get_corpus_iob(self, out_file):
         with open(out_file, 'wt') as of:
@@ -327,6 +328,10 @@ class AnnotatedCorpus:
 
     def get_chunks(self, turns, embeddings):
         for turn in turns:
+            for fr_name, chunk in self.get_chunks_for_turn(turn, embeddings):
+                yield RichChunk((chunk[0], fr_name), embeddings, self.frames_dict[self._real_frame_name(fr_name)], turn)
+
+    def get_chunks_for_turn(self, turn, embeddings):
             candidates = {}
             for chunk in turn.replaced_role_labeling:
                 for frame in self.selected_frames:
@@ -340,7 +345,7 @@ class AnnotatedCorpus:
                             else:
                                 candidates[fr.lower()] = (chunk[0], len(chunk[1]))
             for fr_name, chunk in candidates.items():
-                yield RichChunk((chunk[0], fr_name), embeddings, self.frames_dict[self._real_frame_name(fr_name)], turn)
+                yield fr_name, chunk
 
     def _filter_out_turn_frames(self, t):
         if self.selected_frames is not None:
@@ -361,8 +366,9 @@ class RichChunk:
         self.verb_e = embeddings.embed_tokens(chunk[0].split())
         self.content_e = embeddings.embed_tokens(chunk[1].split('_'))
         if len(semframe.instance_embeddings) > 0:
-            instance_embeddings, _ = zip(*semframe.instance_embeddings)
-            self.instance_embedding = np.mean(instance_embeddings, axis=0)
+            instance_embeddings, counts = zip(*semframe.instance_embeddings)
+            total_instances = sum(counts)
+            self.instance_embedding = sum([count * emb / total_instances for emb, count in semframe.instance_embeddings])
         else:
             self.instance_embedding = embeddings.embed_tokens(['unk'])
         self.turn_reference = turn_reference
@@ -371,10 +377,10 @@ class RichChunk:
         verb_similarity = self.embeddings.embedding_similarity(self.verb_e, chunk2.verb_e)
         content_similarity = self.embeddings.embedding_similarity(self.content_e, chunk2.content_e)
         # return 1/verb_similarity
-        return 1/verb_similarity + np.linalg.norm(self.instance_embedding - chunk2.instance_embedding, ord=2)
-        return (1 / verb_similarity) + (1 / content_similarity)
+        return 1 / verb_similarity + np.linalg.norm(self.instance_embedding - chunk2.instance_embedding, ord=2)
 
     def get_feats(self):
+        # return self.verb_e
         return np.concatenate((self.verb_e, self.instance_embedding), axis=0)
 
     def to_turn(self):

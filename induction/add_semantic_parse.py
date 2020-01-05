@@ -48,18 +48,27 @@ if __name__ == '__main__':
             elif previous_sum > 0:
                 sentence_tokens = [vocab[tk].lower() for tk in last_sentence.tokens]
                 while True:
-                    turn = next(turn_iterator)
-                    total_turns += 1
-                    user_tokens = [w.text.lower() for w in turn.user_tokens]
-                    distance = editdistance.eval(' '.join(sentence_tokens), ' '.join(user_tokens))
-                    if distance / len(' '.join(user_tokens)) < 0.3:
-                        total_sents += 1
-                        turn.user_semantic_parse_sesame = current_parses
-                        current_parses = []
+                    try:
+                        turn = next(turn_iterator)
+                        total_turns += 1
+                        user_tokens = [w.text.lower() for w in turn.user_tokens]
+                        distance = editdistance.eval(' '.join(sentence_tokens), ' '.join(user_tokens))
+                        print(sentence_tokens)
+                        num_unkns = sum([tk == 'unk' for tk in sentence_tokens])
+                        thr = 0.3 if 'unk' not in sentence_tokens else 0.3 + 0.16 * num_unkns
+                        print(distance / len(' '.join(user_tokens)))
+                        if distance / len(' '.join(user_tokens)) < thr:
+                            total_sents += 1
+                            turn.user_semantic_parse_sesame = current_parses
+                            print(turn.user, turn.user_semantic_parse_sesame)
+                            current_parses = []
+                            break
+                        else:
+                            total_skips += 1
+                            turn.user_semantic_parse_sesame = []
+                    except StopIteration as e:
+                        print('Early stop! annotated {} turns'.format(total_turns))
                         break
-                    else:
-                        total_skips += 1
-                        turn.user_semantic_parse_sesame = []
             previous_sum = sentence_sum
             last_sentence = parsed_sentence
             #print(vars(last_sentence))
@@ -80,8 +89,10 @@ if __name__ == '__main__':
             for line, turn in zip(semf, dataset.turns):
                 parse = json.loads(line)
                 turn.user_semantic_parse_semafor = []
+                turn.user = turn.user.strip()
                 for frame in parse['frames']:
                     turn.user_semantic_parse_semafor.append((frame['target']['spans'][0]['text'], frame['target']['name'], frame['target']['spans'][0]['start']))
+                print(turn.user, turn.user_semantic_parse_semafor)
     else:
         print('Unknown parse type: {}'.format(args.type))
     dataset.save_dialogues(args.output)

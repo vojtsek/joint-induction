@@ -42,6 +42,20 @@ def plot_dendrogram(model, **kwargs):
     dendrogram(linkage_matrix, **kwargs)
 
 
+def save_cluster_stats(chunks, f):
+    verb_stats = {}
+    for chunk in chunks:
+        verb, frame = chunk.chunk
+        if not (verb, frame) in verb_stats:
+            verb_stats[(verb, frame)] = 1
+        else:
+            verb_stats[(verb, frame)] += 1
+    
+    for pair, count in sorted(verb_stats.items(), key=lambda it: it[1]):
+        print(pair, count, file=f)
+    return verb_stats
+
+
 def compute_statistics_for_turns(turns):
     stats = Counter()
     for t in turns:
@@ -67,9 +81,6 @@ if __name__ == '__main__':
     if not os.path.isdir(args.work_dir):
         os.makedirs(args.work_dir)
 
-    annotated_corpus = AnnotatedCorpus(
-                            allowed_pos=['amod', 'nmod', 'nsubj', 'compound', 'conj'],
-                            data_fn=args.corpus)
     embeddings = Embeddings(args.embedding_file)
     if args.data_type == 'raw':
         with open(args.data_fn, 'rt') as infd:
@@ -83,16 +94,16 @@ if __name__ == '__main__':
     else:
         dataset = Dataset(saved_dialogues=args.data_fn)
 
-    dataset_list = [list(dataset.turns)]
+    dataset_list = [list(dataset.train_set)]
     selected_frames = None
     previously_merged = {}
     count_previously_selected = 0
     for iteration in range(NUM_ITERATIONS):
+        cluster_verb_stats = {}
         tmp_dataset_list = []
         new_selected_frames = set()
         stats_frame_cluster = {x: {} for x in range(3)}
         for n, turns in enumerate(dataset_list):
-            print(len(turns))
             annotated_corpus = AnnotatedCorpus(allowed_pos=['amod', 'nmod', 'nsubj', 'compound', 'conj'])
             annotated_corpus.merged_frames = previously_merged
 # because of this the frames are preselected and thus some semantics is omitted
@@ -116,14 +127,13 @@ if __name__ == '__main__':
             # rank
             annotated_corpus.filter_frames(lambda fr: fr.count > 1)
             frame_ranks = list(annotated_corpus.compute_frame_rank())
-            annotated_corpus.frame_stats()
             for frame in annotated_corpus.frames_dict.values():
                 stats_frame_cluster[n][frame.name] = frame.count
             num_selected = min(round(NUM_ACCEPTED_FRAMES - iteration), len(annotated_corpus.frames_dict))
 
             selected_frames_this_iteration = []
             _, frame_scores = zip(*frame_ranks)
-            limit_score = np.mean(frame_scores) * 5 / 4
+            limit_score = np.mean(frame_scores) * 6 / 5
             prev_score = -1
             for m, (frame, score) in enumerate(frame_ranks):
                 # if m < num_selected or prev_score == score:
@@ -131,6 +141,10 @@ if __name__ == '__main__':
                     selected_frames_this_iteration.append(frame)
                 prev_score = score
             new_selected_frames.update(selected_frames_this_iteration)
+            annotated_corpus.selected_frames = selected_frames_this_iteration
+            with open(os.path.join(args.work_dir, 'cluster_stats-iter-{}-{}.txt'.format(iteration, n)), 'wt') as of:
+                annotated_corpus.frame_stats(of)
+                cluster_verb_stats[len(cluster_verb_stats)] = save_cluster_stats(annotated_corpus.get_chunks(turns, embeddings), of)
             print('selected', new_selected_frames)
             annotated_corpus.save(os.path.join(args.work_dir, 'corpus-iter-{}-cluster-{}.pkl'.format(iteration, n)))
         
@@ -141,29 +155,30 @@ if __name__ == '__main__':
         count_previously_selected = len(selected_frames)
         chunks = list(annotated_corpus.get_chunks(dataset.turns, embeddings))
         print('Chunks', len(chunks))
-        if args.compute_distances:
-            print('computing distance matrix')
-            distance_matrix = np.zeros((len(chunks), len(chunks)))
-            for i in range(len(chunks)):
-                for j in range(len(chunks)):
-                    if i == j:
-                        distance_matrix[i][j] = 0
-                    elif distance_matrix[j][i] != 0:
-                        distance_matrix[i][j] = distance_matrix[j][i]
-                    else:
-                        distance_matrix[i][j] = chunks[i].distance(chunks[j])
-
-            with open(args.distance_file, 'wb') as of:
-                pickle.dump(distance_matrix, of)
-        else:
-            with open(args.distance_file, 'rb') as inf:
-                distance_matrix = pickle.load(inf)
+#        if args.compute_distances:
+#            print('computing distance matrix')
+#            distance_matrix = np.zeros((len(chunks), len(chunks)))
+#            for i in range(len(chunks)):
+#                for j in range(len(chunks)):
+#                    if i == j:
+#                        distance_matrix[i][j] = 0
+#                    elif distance_matrix[j][i] != 0:
+#                        distance_matrix[i][j] = distance_matrix[j][i]
+#                    else:
+#                        distance_matrix[i][j] = chunks[i].distance(chunks[j])
+#
+#            with open(args.distance_file, 'wb') as of:
+#                pickle.dump(distance_matrix, of)
+#        else:
+#            with open(args.distance_file, 'rb') as inf:
+#                distance_matrix = pickle.load(inf)
         data = np.array([chunk.get_feats() for chunk in chunks])
         print('fitting clustering')
         no_clusters = 2
         clustering = AgglomerativeClustering(n_clusters=no_clusters,
                                              linkage='ward',
                                              affinity='euclidean')
+#        clustering = SpectralClustering(n_clusters=no_clusters, affinity='rbf')
         clustering = clustering.fit(data)
         #db_score = davies_bouldin_score(data, clustering.labels_)
         #sil_score = silhouette_score(data, clustering.labels_)
@@ -179,4 +194,8 @@ if __name__ == '__main__':
     annotated_corpus.selected_frames = selected_frames
     annotated_corpus.merged_frames = previously_merged
     annotated_corpus.get_corpus_srl_iob(args.work_dir, dataset.turns, 1000)
+    annotated_corpus.save(os.path.join(args.work_dir, 'corpus-final.pkl'.format(iteration, n)))
+    with open(os.path.join(args.work_dir, 'clustering-final.pkl'.format(iteration, n)), 'wb') as of:
+        pickle.dump(cluster_verb_stats, of)
+
 
