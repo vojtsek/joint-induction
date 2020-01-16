@@ -5,7 +5,7 @@ import spacy
 import stanfordnlp
 from allennlp.predictors import Predictor
 
-from .dataset import Dataset, CamRestReader, MultiWOZReader
+from .dataset import Dataset, CamRestReader, MultiWOZReader, MovieReader, AtisReader, CarsluReader
 
 
 def dependency_parsing(parser):
@@ -94,6 +94,12 @@ if __name__ == '__main__':
             reader = MultiWOZReader(['hotel'])
         elif args.domain == 'woz-multi':
             reader = MultiWOZReader(['hotel','restaurant'])
+        elif args.domain == 'movies':
+            reader = MovieReader()
+        elif args.domain == 'atis':
+            reader = AtisReader()
+        elif args.domain == 'carslu':
+            reader = CarsluReader()
         else:
             print('Uknown data domain "{}"'.format(args.domain))
             sys.exit(1)

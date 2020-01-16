@@ -1,4 +1,5 @@
 import argparse
+import sys
 import networkx as nx
 import json
 import editdistance
@@ -36,7 +37,7 @@ if __name__ == '__main__':
 
     annotated_corpus = AnnotatedCorpus(allowed_pos=['amod', 'nmod', 'nsubj', 'compound', 'conj'])
     print('Constructing semantic frames.')
-    annotated_corpus.extract_semantic_frames(dataset)
+    annotated_corpus.extract_semantic_frames(dataset.turns)
     # annotated_corpus.get_corpus_iob('train-corpus.txt')
     print('Computing frame distributed representations')
     embeddings = Embeddings(args.embedding_file)
@@ -46,6 +47,7 @@ if __name__ == '__main__':
     frame_ranks = annotated_corpus.compute_frame_rank()
     selected_frames = [next(frame_ranks) for n in range(NUM_ACCEPTED_FRAMES)]
     annotated_corpus.selected_frames = selected_frames
+    annotated_corpus.frame_stats(sys.stdout)
     print(selected_frames)
     # annotated_corpus.get_verb_arg_pairs(dataset.turns, selected_frames)
     annotated_corpus.get_corpus_srl_iob(args.output_iob, dataset.turns, train_len=500)

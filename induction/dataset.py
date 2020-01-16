@@ -4,20 +4,32 @@ import numpy
 from collections import Counter
 
 class Dataset:
-    def __init__(self, data=None, reader=None, saved_dialogues=None, train=.8):
+    def __init__(self, data=None, reader=None, saved_dialogues=None, train=.6):
         if saved_dialogues is not None:
             with open(saved_dialogues, 'rb') as fd:
                 print('Loading data from "{}"'.format(saved_dialogues))
-                self.dialogues = pickle.load(fd)
-                self.length = len(self.dialogues)
+                self._dialogues = pickle.load(fd)
+                self.length = len(self._dialogues)
         else:
             self.reader = reader
             self._parse_data(data)
         self.train = train
+        self.permutation = list(range(len(self._dialogues)))
+
+    def permute(self, seed=0):
+        numpy.random.seed(seed)
+        self.permutation = numpy.random.permutation(len(self.dialogues))
+
+    @property
+    def dialogues(self):
+        dials = []
+        for idx in self.permutation:
+            dials.append(self._dialogues[idx])
+        return dials
 
     def _parse_data(self, data):
-        self.dialogues = [d for d in self.reader.parse_dialogues(data)]
-        self.length = len(self.dialogues)
+        self._dialogues = [d for d in self.reader.parse_dialogues(data)]
+        self.length = len(self._dialogues)
 
     def apply_to_dialogues(self, fun):
         for d in self.dialogues:
@@ -33,6 +45,12 @@ class Dataset:
         for d in dials:
             for t in d.turns:
                 yield t
+
+    def turns_from_chunk(self, chunk_idxs):
+        for i in chunk_idxs:
+            d = self._dialogues[self.permutation[i]]
+            for turn in d.turns:
+                yield turn
 
     @property
     def turns(self):
@@ -143,7 +161,11 @@ class MultiWOZReader:
         for dial in data.values():
             dialogue = Dialogue()
             turns = dial['log']
+            i = 0
             for t in turns:
+                i += 1
+                if i % 2 == 0:
+                    continue
                 turn = Turn()
                 text = t['text'].strip().replace('\n', ' ')
                 turn.add_user(text)
@@ -155,6 +177,7 @@ class MultiWOZReader:
                 if len(slu) == 0:
                     continue
                 turn.add_usr_slu(slu)
+                print('SLUUU', [s.intent for s in slu])
                 intent_counter = Counter()
                 for slot in slu:
                     intent_counter[slot.intent] += 1
@@ -162,7 +185,7 @@ class MultiWOZReader:
                     turn.add_intent(intent_counter.most_common(1)[0][0])
                 else:
                     turn.add_intent(None)
-                sys_turn = next
+                print(turn.user)
                 dialogue.add_turn(turn)
             yield dialogue
 
@@ -178,4 +201,77 @@ class MultiWOZReader:
                 slot = Slot(s[0].lower(), s[1], intent)
             usr_slu.append(slot)
         return usr_slu
+
+class MovieReader:
+    
+    def __init__(self):
+        pass
+
+    def parse_dialogues(self, data):
+        for dial in data['SearchScreeningEvent']:
+            dialogue = Dialogue()
+            text, slu = self.extract_turn(dial['data'])
+            text = text.strip().replace('\n', '')
+            print(text, slu)
+            turn = Turn()
+            turn.add_user(text)
+            turn.add_system('dummy')
+            turn.add_usr_slu(slu)
+            dialogue.add_turn(turn)
+            yield dialogue
+
+    def extract_turn(self, data):
+        text = ''.join([tk['text'] for tk in data])
+        entities = [tk for tk in data if 'entity' in tk]
+        slu = [ Slot(e['entity'].lower(), e['text'], 'unk') for e in entities]
+        return text, slu
+
+class AtisReader:
+    
+    def __init__(self):
+        pass
+
+    def parse_dialogues(self, data):
+        for dial in data['rasa_nlu_data']['common_examples']:
+            dialogue = Dialogue()
+            text = dial['text'].strip().replace('\n', '')
+            turn = Turn()
+            turn.add_user(text)
+            turn.add_system('dummy')
+            print(text, dial['intent'])
+            turn.add_usr_slu(Slot(None, None, dial['intent']))
+            dialogue.add_turn(turn)
+            yield dialogue
+
+    def extract_turn(self, data):
+        text = ''.join([tk['text'] for tk in data])
+        entities = [tk for tk in data if 'entity' in tk]
+        slu = [ Slot(e['entity'].lower(), e['text'], 'unk') for e in entities]
+        return text, slu
+
+
+class CarsluReader:
+    
+    def __init__(self):
+        pass
+
+    def parse_dialogues(self, data):
+        for t in data:
+            dialogue = Dialogue()
+            turn = Turn()
+            if 'text' not in t:
+                continue
+            turn.add_user(t['text'])
+            turn.add_system('dummy')
+            intent, slots = t['slu']
+            print(slots)
+            slu = []
+            for sl in slots:
+                if len(sl) == 1:
+                    slu.append(Slot(sl[0], sl[0], intent))
+                else:
+                    slu.append(Slot(sl[0], sl[1], intent))
+            turn.add_usr_slu(slu)
+            dialogue.add_turn(turn)
+            yield dialogue
 

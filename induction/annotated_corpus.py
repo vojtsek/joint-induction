@@ -27,7 +27,7 @@ class SemanticFrame:
         self.texts = []
 
     def add_instance(self, word, lemma, pos, ctx):
-        self.instances[lemma] += 1
+        self.instances[word] += 1
         self.pos_instances[(lemma, pos)] += 1
         self.count += 1
         self.ctx.append(ctx)
@@ -69,7 +69,8 @@ class SemanticFrame:
     
     def print(self, f=sys.stdout):
         score = self.score if hasattr(self, 'score') else 0
-        print('{0}\n\tcoherence:\t{1:.2f}\n\tinstances:\t{2}\n\tcount:\t\t{3}\n\tfrequency:\t{4}\n\torders:\t\t{5}\n\tscore:\t\t{6}'.format(self.name, self.coherence, list(self.pos_instances.items()), self.count, self.relative_frequency, self.orders, score), file=f)
+        print(self.name, self.coherence, list(self.pos_instances.items()), self.count, self.relative_frequency, self.orders, score, file=f)
+        # print('{0}\n\tcoherence:\t{1:.2f}\n\tinstances:\t{2}\n\tcount:\t\t{3}\n\tfrequency:\t{4}\n\torders:\t\t{5}\n\tscore:\t\t{6}'.format(self.name, self.coherence, list(self.pos_instances.items()), self.count, self.relative_frequency, self.orders, score), file=f)
         print(self.dependencies.most_common(5), file=f)
         print(self.heads.most_common(5), file=f)
         for dep in self.frame_dependencies:
@@ -88,7 +89,7 @@ class SemanticFrame:
             for dep2 in other.dependencies.items():
                 all_dependencies += dep1[1] + dep2[1]
                 if dep1[0][1] == dep2[0][1] and dep1[0][2] == dep2[0][2]:
-                    same_context += dep1[1]
+                    same_context += min(dep1[1], dep1[1])
         if all_dependencies == 0:
             return 0
         return embedding_distance + same_context / all_dependencies
@@ -118,8 +119,12 @@ class AnnotatedCorpus:
         for t in turns:
             turn_text = t.user
             if not hasattr(t, 'semantics'):
-                semantics = set(t.user_semantic_parse_sesame)
+                if hasattr(t,' user_semantic_parse_sesame'):
+                    semantics = set(t.user_semantic_parse_sesame)
+                else:
+                    semantics = set()
                 semantics.update(t.user_semantic_parse_semafor)
+                # semantics.update(t.ner)
                 t.semantics = semantics
             dep_parse = t.user_dependency_parse
             if replace_srl:
@@ -133,29 +138,32 @@ class AnnotatedCorpus:
                         continue
                     if w[2] not in self.allowed_pos:
                         continue
-                    if w[0].text == fr[0] and w[0].pos in ['NN', 'JJ', 'NNP']:
+                    if w[0].text in fr[0] and w[0].pos in ['NN', 'JJ', 'NNP']:
                         for fr_dep in t.semantics:
                             if fr_dep[0] in [w[1].lemma, w[1].text]:
                                 semframe.add_frame_dependency(self._real_frame_name(fr_dep[1]), w[2])
                                 break
-                        semframe.add_instance(w[0].text, w[0].lemma, w[0].pos, t.user)
+                        semframe.add_instance(fr[0], w[0].lemma, w[0].pos, t.user)
                         semframe.add_dependency((self._real_frame_name(fr[1]), w[1].lemma, w[2]))
-                    elif w[1].text == fr[0]:
+                    elif w[1].text in fr[0]:
                         for fr_dep in t.semantics:
                             if fr_dep[0] in [w[0].lemma, w[0].text]:
                                 semframe.add_frame_dependency(self._real_frame_name(fr_dep[1]), w[2])
                                 break
-                        semframe.add_instance(w[1].text, w[1].lemma, w[1].pos, t.user)
+                        semframe.add_instance(fr[0], w[1].lemma, w[1].pos, t.user)
                         semframe.add_head((w[0].lemma, self._real_frame_name(fr[1]), w[2]))
                 semframe.append_text([self._real_frame_name(fr[1]) if tk.lemma == fr[0] else tk.text for tk in t.user_tokens])
             self.add_utterance(t.user, turn_text)
         self._normalize_frame_frq()
 
     def compute_frame_rank(self):
+        if len(self.frames_dict) == 0:
+            return []
         graph_rank = self.compute_graph_rank()
         graph_rank_frames_only = [(k, v) for k, v in graph_rank.items() if k in self.frames_dict]
         graph_based_order = sorted(graph_rank_frames_only, key=lambda f: f[1], reverse=True)
-        graph_based_order, _ = zip(*graph_based_order)
+        if len(graph_based_order) > 0:
+            graph_based_order, _ = zip(*graph_based_order)
         frq_rank = sorted(self.frames_dict.items(),
             key=lambda f: f[1].relative_frequency, reverse=True)
         frq_based_order, _ = zip(*frq_rank)
@@ -205,6 +213,7 @@ class AnnotatedCorpus:
                 print(role_pair)
 
     def _order_merging_policy(self, orders):
+        orders = list(sorted(orders))[:-1]
         return functools.reduce(lambda a,b: a + b, orders)
 
     def _coherence_rank_f(self, frame):
@@ -293,7 +302,7 @@ class AnnotatedCorpus:
                     print(tk_raw, tag, file=of)
                 print(file=of)
 
-    def get_corpus_srl_iob(self, out_dir, turns, train_len):
+    def get_corpus_srl_iob(self, out_dir, turns, train_len, selected=None):
         def rank_f(turn):
             semantics = set(turn.user_semantic_parse_semafor + turn.user_semantic_parse_sesame)
             return len([f for f in semantics if self._real_frame_name(f[1]).lower() in self.selected_frames])
@@ -302,6 +311,8 @@ class AnnotatedCorpus:
         train_written = False
         sorted_turns = sorted(turns, key=lambda t: rank_f(t), reverse=True)
         of = open(os.path.join(out_dir, 'train'), 'wt')
+        if selected is None:
+            selected = self.selected_frames
         for turn in sorted_turns:
             if count > train_len:
                 of.close()
@@ -318,7 +329,7 @@ class AnnotatedCorpus:
                     tk_raw = tk_raw.strip('!?.,')
                     tk_parsed = tk_parsed.strip('!?.,').lower()
                     tag_type =  'I' if tk_parsed == last_tk else 'B'
-                    if self._real_frame_name(tk_parsed) in self.selected_frames:
+                    if self._real_frame_name(tk_parsed) in selected:
                         tag = '{}-{}'.format(tag_type, self._real_frame_name(tk_parsed))
                     else:
                         tag = 'O'
@@ -329,7 +340,9 @@ class AnnotatedCorpus:
     def get_chunks(self, turns, embeddings):
         for turn in turns:
             for fr_name, chunk in self.get_chunks_for_turn(turn, embeddings):
-                yield RichChunk((chunk[0], fr_name), embeddings, self.frames_dict[self._real_frame_name(fr_name)], turn)
+                if not self._real_frame_name(fr_name) in self.frames_dict:
+                    continue
+                yield RichChunk((chunk[0], self._real_frame_name(fr_name)), embeddings, self.frames_dict[self._real_frame_name(fr_name)], turn)
 
     def get_chunks_for_turn(self, turn, embeddings):
             candidates = {}
@@ -345,7 +358,7 @@ class AnnotatedCorpus:
                             else:
                                 candidates[fr.lower()] = (chunk[0], len(chunk[1]))
             for fr_name, chunk in candidates.items():
-                yield fr_name, chunk
+                yield self._real_frame_name(fr_name), chunk
 
     def _filter_out_turn_frames(self, t):
         if self.selected_frames is not None:
@@ -381,7 +394,9 @@ class RichChunk:
 
     def get_feats(self):
         # return self.verb_e
-        return np.concatenate((self.verb_e, self.instance_embedding), axis=0)
+        alpha = .5
+        return alpha * self.verb_e + (1 - alpha) * self.instance_embedding
+        return np.concatenate((alpha * self.verb_e, (1 - alpha) * self.instance_embedding), axis=0)
 
     def to_turn(self):
         t = copy.deepcopy(self.turn_reference)
