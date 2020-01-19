@@ -44,7 +44,7 @@ if __name__ == '__main__':
             return name, val
 
         for t in dataset.turns:
-            print(get_turn_attribute(t, 'user'))
+            print(get_turn_attribute(t, 'intent'))
 #            print(get_turn_attribute(t, 'usr_slu'))
             slu = []
 #            for s in get_turn_attribute(t, 'usr_slu'):
@@ -72,5 +72,8 @@ if __name__ == '__main__':
             print(get_turn_attribute(t, 'user_semantic_parse_semafor'))
             print(get_turn_attribute(t, 'user_semantic_parse_sesame'))
             print_separator()
+    elif args.output_type == 'count':
+        turns = len([t for t in dataset.turns])
+        print(turns)
     else:
         print('Unknown output type {}'.format(args.output_type))

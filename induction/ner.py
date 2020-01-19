@@ -216,6 +216,8 @@ if __name__ == '__main__':
         total = 0
         with open(os.path.join(args.exp_dir, 'test_set'), 'rb') as f:
             test_set = pickle.load(f)
+        with open(os.path.join(args.exp_dir, 'train_set'), 'rb') as f:
+            train_set = pickle.load(f)
         dataset_dict = prepare_data_dict(args.data_dir)
         corpus = Corpus(dataset_dict, embeddings_file_path=None)
         annotated_corpus = AnnotatedCorpus(allowed_pos=['amod', 'nmod', 'nsubj', 'compound', 'conj'], data_fn=args.corpus)
@@ -228,7 +230,7 @@ if __name__ == '__main__':
 
         model_evaluator = GenericEvaluator('NN MODEL', eval_mapping, slot_names)
         parser_evaluator = GenericEvaluator('PARSER', eval_mapping, slot_names)
-        for n, turn in enumerate(test_set):
+        for n, turn in enumerate(train_set):
             state = {}
             turn_slu = {}
             for slot in turn.usr_slu:
@@ -242,9 +244,8 @@ if __name__ == '__main__':
             # doc = nlp(turn.user)
             semantics = set(turn.user_semantic_parse_sesame)
             semantics.update(turn.user_semantic_parse_semafor)
-            print(annotated_corpus.selected_frames)
             by_parser = augment_parser_numbers([(annotated_corpus._real_frame_name(f[1]), f[0]) for f in semantics if annotated_corpus._real_frame_name(f[1]) in annotated_corpus.selected_frames], turn.user)
-            print(turn.user, turn_slu, by_model)
+            print(turn.user, turn_slu, by_model, by_parser)
             by_model = sorted(by_model, key=lambda x: x[0])
             by_parser = sorted(by_parser, key=lambda x: x[0])
             model_evaluator.add_turn(turn_slu, by_model)

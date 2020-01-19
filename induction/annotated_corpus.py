@@ -169,6 +169,11 @@ class AnnotatedCorpus:
         frq_based_order, _ = zip(*frq_rank)
         coherence_rank = sorted(self.frames_dict.items(),
             key=lambda f: f[1].coherence, reverse=True)
+        alpha = 0.2
+        rank = sorted(self.frames_dict.items(),
+                      key=lambda f: (1 - alpha) * np.log(f[1].relative_frequency) +
+                                    alpha * np.log(f[1].coherence), reverse=True)
+        # return rank
         coherence_based_order, _ = zip(*coherence_rank)
         keywords = self.extract_keywords() # sorted already
         keywords_frames_only = [(k, v) for k, v in keywords if k in self.frames_dict]

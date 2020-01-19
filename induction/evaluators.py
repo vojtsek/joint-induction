@@ -1,3 +1,10 @@
+import os
+import argparse
+import pickle
+
+import numpy as np
+from .annotated_corpus import AnnotatedCorpus
+from .embeddings import Embeddings
 
 class SlotEvaluator:
     def __init__(self, name='dummy'):
@@ -8,11 +15,11 @@ class SlotEvaluator:
 
     @property
     def precision(self):
-        return self.tp / (self.tp + self.fp)
+        return round(self.tp) / (self.tp + self.fp)
 
     @property
     def recall(self):
-        return self.tp / (self.tp + self.fn)
+        return round(self.tp) / (self.tp + self.fn)
 
     @property
     def f1(self):
@@ -77,6 +84,37 @@ class GenericEvaluator:
         print('-' * 80, file=result)
 
 
+def compute_ap(frames, sorted_list):
+    spoted = 0
+    i = 0
+    precision_sum = 0
+    cut_off = 20
+    for fr_name in sorted_list:
+        i += 1
+        spoted_any = False
+        for fr in fr_name.split('-'):
+            if fr in frames:
+                spoted += 1
+                print(fr, 'adding {}/{}'.format(spoted, i))
+                precision_sum += spoted / i
+                i += 1
+        if spoted == len(frames):
+            break
+    # return precision_sum
+    return precision_sum / len(frames)
+
+
+def compute_mean_precision(mapping, sorted_list):
+    all_mapped_frames = []
+    for slot, frames in mapping.items():
+        all_mapped_frames.extend(frames)
+    print(all_mapped_frames)
+    print(sorted_list)
+    ap = compute_ap(all_mapped_frames, sorted_list)
+    # return np.mean([compute_ap(frames, sorted_list) for _, frames in mapping.items()])
+    return ap
+
+
 camrest_eval_mapping = {
     'origin': 'food',
     'expensiveness': 'pricerange',
@@ -126,3 +164,64 @@ woz_hotel_eval_mapping = {
     'performers': 'stars',
     'stars': 'stars'
 }
+
+ap_woz_mapping = {
+    'slot': ['locale', 'commerce_scenario', 'contacting', 'quantity', 'speak_on_topic', 'topic', 'natural_features', 'sending'],
+    'type': ['building', ''],
+    'area': ['locative_relation', 'locale_by_use', 'direction', 'part_inner_outer', 'part_orientational'],
+    'day': ['calendric_unit'],
+    'price': ['expensiveness'],
+    'stars': ['performers_and_roles'],
+    'people': ['people', 'visiting', ],
+}
+
+ap_camrest_mapping = {
+    'food': ['origin', 'natural_features', 'custom', 'temporal_collocation', 'people_by_origin', 'stage_of_progress'],
+    'price': ['expensiveness', 'ordinal_numbers'],
+    'area': ['direction', 'locative_relation', 'part_orientational', 'part_inner_outer'],
+    'slot': ['quantity', 'contacting', 'artifact', 'topic', 'statement', 'speak_on_topic', 'sending']
+}
+
+ap_carslu_mapping = {
+    'food': ['origin', 'natural_features', 'custom', 'temporal_collocation', 'people_by_origin', 'stage_of_progress'],
+    'price': ['expensiveness', 'ordinal_numbers'],
+    'area': ['direction', 'locative_relation', 'part_orientational', 'part_inner_outer'],
+    'slot': ['quantity', 'contacting', 'artifact', 'topic', 'statement', 'speak_on_topic', 'sending'],
+    'type': ['locale_by_use']
+}
+
+
+if __name__ == '__main__':
+    parser = argparse.ArgumentParser()
+    parser.add_argument('--domain', type=str)
+    parser.add_argument('--corpus', type=str)
+    parser.add_argument('--result_file', type=str)
+    parser.add_argument('--train_set', type=str)
+    parser.add_argument('--embeddings', type=str)
+    parser.add_argument('--join', action='store_true')
+    args = parser.parse_args()
+
+
+    if args.domain == 'camrest':
+        mapping = ap_camrest_mapping
+    elif args.domain == 'carslu':
+        mapping = ap_carslu_mapping
+    elif args.domain == 'woz-hotel':
+        mapping = ap_woz_mapping
+
+    if args.embeddings is not None:
+        embeddings = Embeddings(args.embeddings)
+    annotated_corpus = AnnotatedCorpus(allowed_pos=['amod', 'nmod', 'nsubj', 'compound', 'conj'], data_fn=args.corpus)
+    with open(os.path.join(args.train_set), 'rb') as f:
+        train_set = pickle.load(f)
+    selected_frames = annotated_corpus.selected_frames
+    #annotated_corpus.extract_semantic_frames(train_set, replace_srl=False)
+    #annotated_corpus.compute_frame_embeddings(embeddings)
+    #annotated_corpus.compute_frame_rank()
+    #selected_frames = [f[0] for f in sorted(annotated_corpus.frames_dict.items(),
+     #                                       key=lambda x: x[1].score)]
+    mean_ap = compute_mean_precision(mapping, selected_frames)
+    print(mean_ap)
+    with open(args.result_file, 'wt') as of:
+        print(mean_ap, file=of)
+

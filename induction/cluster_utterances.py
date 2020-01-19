@@ -158,7 +158,7 @@ if __name__ == '__main__':
                     _, frame_scores = zip(*frame_ranks)
                 else:
                     frame_scores = []
-                limit_score = np.mean(frame_scores) * 4 / 3
+                limit_score = np.mean(frame_scores) * 5 / 4
                 prev_score = -1
                 for m, (frame, score) in enumerate(frame_ranks):
                     # if m < num_selected or prev_score == score:
