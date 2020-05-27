@@ -11,7 +11,7 @@ from ner.utils import tokenize, lemmatize
 from ner.network import NER
 
 from .annotated_corpus import AnnotatedCorpus
-from .evaluators import GenericEvaluator, camrest_eval_mapping, movies_eval_mapping, woz_hotel_eval_mapping, carslu_eval_mapping
+from .evaluators import GenericEvaluator, camrest_eval_mapping, movies_eval_mapping, woz_hotel_eval_mapping, carslu_eval_mapping, woz_attr_eval_mapping, atis_eval_mapping
 from .dataset import Dataset
 
 nlp = spacy.load("en_core_web_sm")
@@ -72,6 +72,7 @@ def print_predict(sentence, network, f=sys.stdout, threshold=0.2):
 
     predicted_tags = []
     last_number = None
+    last_tk = None
     for token, tag, l in zip(tokens, tags, logits):
         if is_number(token.lower()):
             last_number = normalize_num(token)
@@ -95,8 +96,14 @@ def print_predict(sentence, network, f=sys.stdout, threshold=0.2):
             elif 'performers' in tag and last_number is not None:
                 predicted_tags.append(('stars', last_number))
                 last_number = None
+            elif 'gpe' in tag:
+                if last_tk == 'to':
+                    predicted_tags.append(('toloc.city_name', token))
+                else:
+                    predicted_tags.append(('fromloc.city_name', token))
             else:
                 predicted_tags.append((tag[2:], token))
+        last_tk = token
     return predicted_tags
 
 
@@ -104,11 +111,14 @@ def augment_parser_numbers(parse, txt):
     parse_dct = {k: v for k, v in parse}
     inv_parse_dct = {v: k for k, v in parse}
     last_number = None
+    last_tk = None
+    print(parse_dct, inv_parse_dct)
     for tk in txt.split():
         if is_number(tk):
             last_number = normalize_num(tk)
         elif tk.lower() in inv_parse_dct:
             fr = inv_parse_dct[tk.lower()]
+            print('got', fr)
             if 'calendric' in fr and 'night' in tk and last_number is not None:
                 if fr in parse_dct:
                     del parse_dct[fr]
@@ -124,6 +134,12 @@ def augment_parser_numbers(parse, txt):
                     del parse_dct[fr]
                 parse_dct['stars'] = last_number
                 last_number = None
+            elif 'gpe' in fr:
+                if last_tk == 'to':
+                    parse_dct['toloc.city_name'] = tk
+                else:
+                    parse_dct['fromloc.city_name'] = tk
+        last_tk = tk
 
     return list(parse_dct.items())
 
@@ -171,6 +187,7 @@ if __name__ == '__main__':
                     "cell_type": 'gru',
                     "use_capitalization": True,
                    }
+    replace_request = False
     if args.domain == 'camrest':
         slot_names = ['food', 'pricerange', 'area', 'slot']
         eval_mapping = camrest_eval_mapping
@@ -181,10 +198,17 @@ if __name__ == '__main__':
         eval_mapping = woz_hotel_eval_mapping
         slot_names = ['req-stars', 'choice', 'req-phone', 'req-address', 'req-area', 'req-price', 'day', 'type', 'area', 'price', 'parking', 'internet', 'people', 'stars', 'stay']
         slot_names = ['slot', 'day', 'type', 'area', 'price', 'people', 'stars', 'stay']
+    elif args.domain == 'woz-attr':
+        eval_mapping = woz_attr_eval_mapping
+        replace_request = True
+        slot_names = ['slot', 'area', 'type']
     elif args.domain == 'carslu':
         eval_mapping = carslu_eval_mapping
         slot_names = ['food', 'pricerange', 'area', 'phone', 'type', 'address']
         slot_names = ['food', 'pricerange', 'area', 'slot', 'type']
+    elif args.domain == 'atis':
+        eval_mapping = atis_eval_mapping
+        slot_names = ['depart_date.day_name', 'fromloc.city_name', 'airline_name', 'depart_time.period_mod', 'flight_mod', 'toloc.city_name']
     else:
         slot_names = []
         eval_mapping = {}
@@ -198,6 +222,7 @@ if __name__ == '__main__':
             annotated_corpus = AnnotatedCorpus(allowed_pos=['amod', 'nmod', 'nsubj', 'compound', 'conj'], data_fn=args.corpus)
             selected = [fr for fr in annotated_corpus.selected_frames if any([el in fr for el in eval_mapping.keys()])]
             print(selected)
+            selected = annotated_corpus.selected_frames
             print('Creating corpus in', args.data_dir)
             annotated_corpus.get_corpus_srl_iob(args.data_dir, train_set, args.train_size, selected=selected)
         dataset_dict = prepare_data_dict(args.data_dir)
@@ -244,13 +269,14 @@ if __name__ == '__main__':
             # doc = nlp(turn.user)
             semantics = set(turn.user_semantic_parse_sesame)
             semantics.update(turn.user_semantic_parse_semafor)
+            semantics = turn.semantics
             by_parser = augment_parser_numbers([(annotated_corpus._real_frame_name(f[1]), f[0]) for f in semantics if annotated_corpus._real_frame_name(f[1]) in annotated_corpus.selected_frames], turn.user)
             print(turn.user, turn_slu, by_model, by_parser)
             by_model = sorted(by_model, key=lambda x: x[0])
             by_parser = sorted(by_parser, key=lambda x: x[0])
-            model_evaluator.add_turn(turn_slu, by_model)
+            model_evaluator.add_turn(turn_slu, by_model, replace_request)
             total += len(by_model)
-            parser_evaluator.add_turn(turn_slu, by_parser)
+            parser_evaluator.add_turn(turn_slu, by_parser, replace_request)
             if n % 30 == 0:
                 model_evaluator.eval(sys.stdout)
                 parser_evaluator.eval(sys.stdout)

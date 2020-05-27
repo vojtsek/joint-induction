@@ -124,7 +124,7 @@ class AnnotatedCorpus:
                 else:
                     semantics = set()
                 semantics.update(t.user_semantic_parse_semafor)
-                # semantics.update(t.ner)
+               # semantics.update([(f[0], f[1][0].upper() + f[1][1:], f[2]) for f in t.ner])
                 t.semantics = semantics
             dep_parse = t.user_dependency_parse
             if replace_srl:
@@ -181,7 +181,7 @@ class AnnotatedCorpus:
             kw_based_order = []
         else:
             kw_based_order, _ = zip(*keywords_frames_only)
-        for ordering in [kw_based_order, graph_based_order, coherence_based_order, frq_based_order]:
+        for ordering in [graph_based_order, coherence_based_order, frq_based_order]:
             if len(ordering) != len(self.frames_dict):
                 for fr in self.frames_dict:
                     if fr not in ordering:
@@ -192,7 +192,7 @@ class AnnotatedCorpus:
         for frame in self.frames_dict.values():
             frame.score = self._order_merging_policy(frame.orders)
         frames_with_scores = [(frame_name, frame.score) for frame_name, frame in self.frames_dict.items()]
-        frames_with_scores_sorted = map(lambda x: (x.name, x.score), sorted(self.frames_dict.values(), key=lambda f: f.score))
+        frames_with_scores_sorted = list(map(lambda x: (x.name, x.score), sorted(self.frames_dict.values(), key=lambda f: f.score)))
         return frames_with_scores_sorted
 
     def merge_frames(self, fr1, fr2):

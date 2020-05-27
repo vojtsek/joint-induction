@@ -28,6 +28,8 @@ NUM_ACCEPTED_FRAMES=10
 nlp = spacy.load('en_core_web_sm')
 def extract_turn_chunks_dummy(turn, annotated_turns):
     chunks = []
+    if turn.user.lower() not in annotated_turns:
+        return []
     tagger_annotations = annotated_turns[turn.user.lower()]
     doc = nlp(turn.user)
     last_verb = None
@@ -83,6 +85,11 @@ if __name__ == '__main__':
     eval_mapping_cc = {2: 'inform', 0: 'inform', 1: 'inform', 3: 'inform', 4: 'reqalts'}
     eval_mapping_ccc = {2: 'inform', 0: 'inform', 1: 'request', 3: 'inform', 4: 'inform'}
     eval_mapping_cccc = {2: 'inform', 0: 'inform', 1: 'inform', 3: 'inform', 4: 'inform'}
+
+    eval_mapping_c = {2: 'flight', 0: 'flight', 1: 'flight', 3: 'airport', 4: 'flight'}
+    eval_mapping_cc = {2: 'flight', 0: 'flight', 1: 'flight', 3: 'flight', 4: 'airfare'}
+    eval_mapping_ccc = {2: 'airport', 0: 'flight', 1: 'flight', 3: 'flight', 4: 'flight'}
+    eval_mapping_cccc = {2: 'flight', 0: 'flight', 1: 'flight', 3: 'flight', 4: 'flight'}
     correct = total = 0
     c = cc = ccc = cccc = 0
     with open('annotated_turns.pkl', 'rb') as f:

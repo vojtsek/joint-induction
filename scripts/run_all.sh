@@ -2,7 +2,8 @@
 set -x
 . env.sh
 #. env-camrest.sh
-. env-woz-hotel.sh
+#. env-woz-hotel.sh
+. env-woz-attr.sh
 # run with ./
 WD=`pwd`${0%/*}
 

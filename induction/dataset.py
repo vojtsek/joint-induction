@@ -173,11 +173,12 @@ class MultiWOZReader:
                 if not 'dialog_act' in t:
                     print('skipping')
                     continue
-                slu = self.parse_slu(t['dialog_act'])
+                slu, are_other_domains = self.parse_slu(t['dialog_act'])
+                if are_other_domains:
+                    continue
                 if len(slu) == 0:
                     continue
                 turn.add_usr_slu(slu)
-                print('SLUUU', [s.intent for s in slu])
                 intent_counter = Counter()
                 for slot in slu:
                     intent_counter[slot.intent] += 1
@@ -191,16 +192,19 @@ class MultiWOZReader:
 
     def parse_slu(self, slu):
         usr_slu = []
+        others = False
         for intent_domain, val in slu.items():
             domain, intent = intent_domain.split('-')
             intent = intent.lower()
             domain = domain.lower()
             if domain not in self.allowed_domains:
+                if len(val) > 0:
+                    others = True
                 continue
             for s in val:
                 slot = Slot(s[0].lower(), s[1], intent)
             usr_slu.append(slot)
-        return usr_slu
+        return usr_slu, others
 
 class MovieReader:
     
@@ -238,8 +242,11 @@ class AtisReader:
             turn = Turn()
             turn.add_user(text)
             turn.add_system('dummy')
-            print(text, dial['intent'])
-            turn.add_usr_slu(Slot(None, None, dial['intent']))
+            intent = dial['intent']
+            slu = []
+            for ent in dial['entities']:
+                slu.append(Slot(ent['entity'], ent['value'], intent))
+            turn.add_usr_slu(slu)
             dialogue.add_turn(turn)
             yield dialogue
 

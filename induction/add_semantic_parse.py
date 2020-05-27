@@ -91,6 +91,15 @@ if __name__ == '__main__':
     elif args.type == 'semafor':
         n = 0
         nlp = spacy.load("en_core_web_sm")
+        ruler = spacy.pipeline.EntityRuler(nlp)
+        patterns = []
+        with open('us_cities.txt', 'rt') as fd:
+            for line in fd:
+                entry = {'label': 'GPE'}
+                entry['pattern'] = [{'LOWER': x.lower()} for x in line.split()]
+                patterns.append(entry)
+        ruler.add_patterns(patterns)
+        nlp.add_pipe(ruler)
         with open(args.semantic_parse, 'rt') as semf:
             for line, turn in zip(semf, dataset.turns):
                 if hasattr(turn, 'semantics'):

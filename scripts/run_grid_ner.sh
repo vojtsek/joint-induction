@@ -1,10 +1,10 @@
-DATA_DIR=exp/woz-hotel-user-5/
-DATASET=data/woz-hotel-user_dialogues.pkl
+DATA_DIR=exp/woz-attr/
+DATASET=data/woz-attr_dialogues.pkl
 #DATA_DIR=exp/carslu/
 #DATASET=data/carslu_dialogues.pkl
 #DATA_DIR=exp/3712/
 #DATASET=data/camrest_dialogues.pkl
-domain=woz-hotel
+domain=woz-attr
 for arch in cnn rnn; do
     for size in 16 32 50 100 150 200; do
         for dropout in 0.5 0.6 0.7 0.8 0.85; do

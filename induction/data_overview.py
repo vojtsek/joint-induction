@@ -35,24 +35,10 @@ if __name__ == '__main__':
     else:
         dataset = Dataset(saved_dialogues=args.data_fn)
     if args.output_type == 'user':
-        def transform(name, val):
-            if val == '?':
-                val = name
-                if name == 'phone':
-                    val = 'phone number'
-                name = 'req-' + name
-            return name, val
-
         for t in dataset.turns:
-            print(get_turn_attribute(t, 'intent'))
-#            print(get_turn_attribute(t, 'usr_slu'))
-            slu = []
-#            for s in get_turn_attribute(t, 'usr_slu'):
-#                print(s.name, s.val, s.intent)
-#                name, val = transform(s.name, s.val)
- #               slu.append(Slot(name, val, 'request' if name.startswith('req') else 'inform'))
-#            t.usr_slu = slu
-#        dataset.save_dialogues(args.data_fn)
+            for s in t.usr_slu:
+                print(s.name, s.intent, t.intent)
+            print('UTT', get_turn_attribute(t, 'user'))
     elif args.output_type == 'filter':
         for d in dataset._dialogues:
             state = {}
@@ -64,7 +50,6 @@ if __name__ == '__main__':
                         new_slu.append(Slot(s.name, s.val, s.intent))
                 t.usr_slu = new_slu
                 print(t.user, t.usr_slu)
-#        dataset.save_dialogues(args.data_fn)
 
     elif args.output_type == 'semantic':
         for t in sorted(dataset.turns, key=lambda t: len(t.user_semantic_parse_semafor)):

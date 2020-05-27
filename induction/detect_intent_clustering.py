@@ -124,6 +124,14 @@ if __name__ == '__main__':
     eval_mapping_cc = {2: 'flight', 0: 'flight', 1: 'flight', 3: 'flight', 4: 'airport'}
     eval_mapping_ccc = {2: 'flight', 0: 'flight', 1: 'airport', 3: 'flight', 4: 'flight'}
     eval_mapping_cccc = {2: 'flight', 0: 'flight', 1: 'flight', 3: 'flight', 4: 'flight'}
+
+    #eval_mapping_c = {2: 'request', 0: 'inform', 1: 'inform', 3: 'inform', 4: 'inform'}
+    #eval_mapping_cc = {2: 'inform', 0: 'request', 1: 'inform', 3: 'inform', 4: 'inform'}
+    #eval_mapping_c = {2: 'inform', 0: 'inform', 1: 'inform', 3: 'request', 4: 'inform'}
+    #eval_mapping_cc = {2: 'inform', 0: 'inform', 1: 'inform', 3: 'inform', 4: 'reqalts'}
+    #eval_mapping_ccc = {2: 'inform', 0: 'inform', 1: 'request', 3: 'inform', 4: 'inform'}
+    #eval_mapping_cccc = {2: 'inform', 0: 'inform', 1: 'inform', 3: 'inform', 4: 'inform'}
+
     correct = total = 0
     c = cc = ccc = cccc = 0
     with open('annotated_turns.pkl', 'rb') as f:
@@ -141,7 +149,8 @@ if __name__ == '__main__':
     for dial, label in zip(test_set, clustering.labels_):
         state = {}
         for turn in dial.turns:
-            # turn.intent = turn.usr_slu[0].intent
+            if len(turn.usr_slu) > 0:
+                turn.intent = turn.usr_slu[0].intent
             slu = []
             print(turn.user, turn.intent, label)
             predicted_cluster = label

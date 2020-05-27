@@ -69,8 +69,8 @@ def get_cv_folds(dataset, folds):
         yield deepcopy(train_set), deepcopy(test_set)
 
 
-NUM_ITERATIONS=10
-CV_FOLDS=5
+MAX_NUM_ITERATIONS=10
+CV_FOLDS=2
 NUM_ACCEPTED_FRAMES=10
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
@@ -100,11 +100,13 @@ if __name__ == '__main__':
     else:
         dataset = Dataset(saved_dialogues=args.data_fn)
 
-#    annotated_corpus = AnnotatedCorpus(allowed_pos=['amod', 'nmod', 'nsubj', 'compound', 'conj'])
-#    annotated_corpus.extract_semantic_frames(dataset.turns, replace_srl=True)
-#    with open('frame_stats.txt', 'wt') as f:
-#        annotated_corpus.frame_stats(f)
-#    dataset.save_dialogues(args.data_fn)
+    for t in dataset.turns:
+        del t.semantics
+    annotated_corpus = AnnotatedCorpus(allowed_pos=['amod', 'nmod', 'nsubj', 'compound', 'conj'])
+    annotated_corpus.extract_semantic_frames(dataset.turns, replace_srl=True)
+    with open('frame_stats.txt', 'wt') as f:
+        annotated_corpus.frame_stats(f)
+    dataset.save_dialogues(args.data_fn)
 
     dataset.permute(args.seed)
     for fold, (train_set, test_set) in enumerate(get_cv_folds(dataset, CV_FOLDS)):
@@ -121,7 +123,7 @@ if __name__ == '__main__':
         previously_merged = {}
         count_previously_selected = 0
 
-        for iteration in range(NUM_ITERATIONS):
+        for iteration in range(MAX_NUM_ITERATIONS):
             cluster_verb_stats = {}
             tmp_dataset_list = []
             new_selected_frames = set()
@@ -139,7 +141,6 @@ if __name__ == '__main__':
                     similarity = fr1.similarity(fr2, embeddings)
                     similarity -= (len(fr1.name.split('-')) + len(fr2.name.split('-'))) / 40
                     if similarity > 0.9 + (.02) * iteration:
-                        print(similarity)
                         annotated_corpus.merge_frames(fr1, fr2)
                 previously_merged.update(annotated_corpus.merged_frames)
                 if len(annotated_corpus.merged_frames) > len_before:
@@ -158,10 +159,9 @@ if __name__ == '__main__':
                     _, frame_scores = zip(*frame_ranks)
                 else:
                     frame_scores = []
-                limit_score = np.mean(frame_scores) * 5 / 4
+                limit_score = np.mean(frame_scores) * 4 / 3
                 prev_score = -1
                 for m, (frame, score) in enumerate(frame_ranks):
-                    # if m < num_selected or prev_score == score:
                     if score < limit_score:
                         selected_frames_this_iteration.append(frame)
                     prev_score = score
@@ -177,6 +177,8 @@ if __name__ == '__main__':
             annotated_corpus.selected_frames = selected_frames
             annotated_corpus.extract_semantic_frames(train_set)
             print('Iteration {}, {} of {}; selected: {}'.format(iteration, len(selected_frames), count_previously_selected, selected_frames))
+            if len(selected_frames) == count_previously_selected:
+                break
             count_previously_selected = len(selected_frames)
             chunks = list(annotated_corpus.get_chunks(train_set, embeddings))
             print('Chunks', len(chunks))
@@ -185,11 +187,7 @@ if __name__ == '__main__':
             clustering = AgglomerativeClustering(n_clusters=args.no_clusters,
                                                  linkage='ward',
                                                  affinity='euclidean')
-#        clustering = SpectralClustering(n_clusters=no_clusters, affinity='rbf')
             clustering = clustering.fit(data)
-            #db_score = davies_bouldin_score(data, clustering.labels_)
-            #sil_score = silhouette_score(data, clustering.labels_)
-            #print(no_clusters, db_score, sil_score)
             new_datasets = {x: set() for x in range(args.no_clusters)}
             for chunk, label in zip(chunks, clustering.labels_):
                 new_datasets[label].add(chunk.to_turn())
@@ -199,10 +197,10 @@ if __name__ == '__main__':
             dataset_list = tmp_dataset_list
         annotated_corpus = AnnotatedCorpus(allowed_pos=['amod', 'nmod', 'nsubj', 'compound', 'conj'])
         annotated_corpus.selected_frames = selected_frames
+        print('FINAL SELECTED FRAMES:', selected_frames)
         annotated_corpus.merged_frames = previously_merged
         annotated_corpus.get_corpus_srl_iob(work_dir, train_set, 1000)
         annotated_corpus.save(os.path.join(work_dir, 'corpus-final.pkl'.format(iteration, n)))
         with open(os.path.join(work_dir, 'clustering-final.pkl'.format(iteration, n)), 'wb') as of:
             pickle.dump(cluster_verb_stats, of)
-
 

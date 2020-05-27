@@ -92,6 +92,8 @@ if __name__ == '__main__':
             reader = CamRestReader()
         elif args.domain == 'woz-hotel':
             reader = MultiWOZReader(['hotel'])
+        elif args.domain == 'woz-attr':
+            reader = MultiWOZReader(['attraction'])
         elif args.domain == 'woz-multi':
             reader = MultiWOZReader(['hotel','restaurant'])
         elif args.domain == 'movies':
