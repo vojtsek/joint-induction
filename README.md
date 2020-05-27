@@ -53,3 +53,10 @@ python -m induction.evaluators --domain [camrest|carslu|woz-hotel] --corpus "exp
 echo "Clustering evaluation"
 python -m induction.evaluate-merging.py "experiment_directory/corpus-final.pkl" [camrest|carslu|woz-hotel]
 ```
+
+# Running the example model
+We provide a pretrained model compressed in the file `example-model.zip`.
+To try out, unzip the zip file and run
+```
+python -m induction.predict-tag --model_dir camrest-example-model/
+```
