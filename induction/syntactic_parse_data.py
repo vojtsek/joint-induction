@@ -96,7 +96,7 @@ if __name__ == '__main__':
             reader = MultiWOZReader(['attraction'])
         elif args.domain == 'woz-multi':
             reader = MultiWOZReader(['hotel','restaurant'])
-        elif args.domain == 'movies':
+        elif args.domain == 'movies' or args.domain == 'snips':
             reader = MovieReader()
         elif args.domain == 'atis':
             reader = AtisReader()

@@ -70,7 +70,7 @@ def get_cv_folds(dataset, folds):
 
 
 MAX_NUM_ITERATIONS=10
-CV_FOLDS=2
+CV_FOLDS=6
 NUM_ACCEPTED_FRAMES=10
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
@@ -101,9 +101,10 @@ if __name__ == '__main__':
         dataset = Dataset(saved_dialogues=args.data_fn)
 
     for t in dataset.turns:
-        del t.semantics
+        if hasattr(t, 'semantics'):
+            del t.semantics
     annotated_corpus = AnnotatedCorpus(allowed_pos=['amod', 'nmod', 'nsubj', 'compound', 'conj'])
-    annotated_corpus.extract_semantic_frames(dataset.turns, replace_srl=True)
+    annotated_corpus.extract_semantic_frames([t for t in dataset.turns if hasattr(t, 'user_semantic_parse_semafor')], replace_srl=True)
     with open('frame_stats.txt', 'wt') as f:
         annotated_corpus.frame_stats(f)
     dataset.save_dialogues(args.data_fn)
@@ -130,6 +131,7 @@ if __name__ == '__main__':
             for n, turns in enumerate(dataset_list):
                 annotated_corpus = AnnotatedCorpus(allowed_pos=['amod', 'nmod', 'nsubj', 'compound', 'conj'])
                 annotated_corpus.merged_frames = previously_merged
+                print(annotated_corpus.frames_dict)
 # because of this the frames are preselected and thus some semantics is omitted
                 if selected_frames is not None:
                     annotated_corpus.selected_frames = selected_frames
@@ -140,7 +142,7 @@ if __name__ == '__main__':
                 for fr1, fr2 in combinations(annotated_corpus.frames_dict.values(), 2):
                     similarity = fr1.similarity(fr2, embeddings)
                     similarity -= (len(fr1.name.split('-')) + len(fr2.name.split('-'))) / 40
-                    if similarity > 0.9 + (.02) * iteration:
+                    if similarity > .6 + (.02) * iteration:
                         annotated_corpus.merge_frames(fr1, fr2)
                 previously_merged.update(annotated_corpus.merged_frames)
                 if len(annotated_corpus.merged_frames) > len_before:
@@ -184,7 +186,7 @@ if __name__ == '__main__':
             print('Chunks', len(chunks))
             data = np.array([chunk.get_feats() for chunk in chunks])
             print('fitting clustering')
-            clustering = AgglomerativeClustering(n_clusters=args.no_clusters,
+            clustering = AgglomerativeClustering(n_clusters=3,#args.no_clusters,
                                                  linkage='ward',
                                                  affinity='euclidean')
             clustering = clustering.fit(data)
@@ -199,7 +201,7 @@ if __name__ == '__main__':
         annotated_corpus.selected_frames = selected_frames
         print('FINAL SELECTED FRAMES:', selected_frames)
         annotated_corpus.merged_frames = previously_merged
-        annotated_corpus.get_corpus_srl_iob(work_dir, train_set, 1000)
+        annotated_corpus.get_corpus_srl_iob(work_dir, train_set, 5000)
         annotated_corpus.save(os.path.join(work_dir, 'corpus-final.pkl'.format(iteration, n)))
         with open(os.path.join(work_dir, 'clustering-final.pkl'.format(iteration, n)), 'wb') as of:
             pickle.dump(cluster_verb_stats, of)

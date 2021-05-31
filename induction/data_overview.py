@@ -36,9 +36,36 @@ if __name__ == '__main__':
         dataset = Dataset(saved_dialogues=args.data_fn)
     if args.output_type == 'user':
         for t in dataset.turns:
+          #  for s in t.usr_slu:
+           #     print(s.name, s.intent, t.intent)
+            print(get_turn_attribute(t, 'user'))
+    if args.output_type == 'iob':
+        for t in dataset.turns:
+            slot_dict = {}
+            tagset = {'ADDRESS', 'PHONE', 'POSTCODE'}
             for s in t.usr_slu:
-                print(s.name, s.intent, t.intent)
-            print('UTT', get_turn_attribute(t, 'user'))
+                if s.name == 'slot':
+                    slot_dict[s.val] = s.val.upper()
+                else:
+                    slot_dict[s.val] = s.name.upper()
+                    tagset.add(s.name.upper())
+                if s.val == 'phone':
+                    slot_dict['phone number'] = 'PHONE PHONE'
+                    slot_dict['PHONE number'] = 'PHONE PHONE'
+
+            usr = get_turn_attribute(t, 'user')
+            tagged = usr
+            for val, name in slot_dict.items():
+                tagged = tagged.replace(val, name)
+            for tk, tag in zip(usr.split(), tagged.split()):
+                tk = tk.strip(',.?!:')
+                tag = tag.strip(',.?!:')
+                if tag in tagset:
+                    tag = 'B-' + tag
+                else:
+                    tag = 'O'
+                print(tk, tag)
+            print()
     elif args.output_type == 'filter':
         for d in dataset._dialogues:
             state = {}

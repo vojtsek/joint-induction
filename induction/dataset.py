@@ -4,7 +4,8 @@ import numpy
 from collections import Counter
 
 class Dataset:
-    def __init__(self, data=None, reader=None, saved_dialogues=None, train=.6):
+    def __init__(self, data=None, reader=None, saved_dialogues=None, train=.6, load_dct=False):
+        self._slot_dct = {}
         if saved_dialogues is not None:
             with open(saved_dialogues, 'rb') as fd:
                 print('Loading data from "{}"'.format(saved_dialogues))
@@ -15,6 +16,9 @@ class Dataset:
             self._parse_data(data)
         self.train = train
         self.permutation = list(range(len(self._dialogues)))
+
+    def get_slot_dct(self):
+        return self._slot_dct
 
     def permute(self, seed=0):
         numpy.random.seed(seed)
@@ -212,7 +216,8 @@ class MovieReader:
         pass
 
     def parse_dialogues(self, data):
-        for dial in data['SearchScreeningEvent']:
+        for dial in data['BookRestaurant']:
+        #for dial in data['SearchScreeningEvent']:
             dialogue = Dialogue()
             text, slu = self.extract_turn(dial['data'])
             text = text.strip().replace('\n', '')

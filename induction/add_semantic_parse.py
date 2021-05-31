@@ -99,7 +99,7 @@ if __name__ == '__main__':
                 entry['pattern'] = [{'LOWER': x.lower()} for x in line.split()]
                 patterns.append(entry)
         ruler.add_patterns(patterns)
-        nlp.add_pipe(ruler)
+       # nlp.add_pipe(ruler)
         with open(args.semantic_parse, 'rt') as semf:
             for line, turn in zip(semf, dataset.turns):
                 if hasattr(turn, 'semantics'):
@@ -113,7 +113,8 @@ if __name__ == '__main__':
                 n += 1
                 for frame in parse['frames']:
                     turn.user_semantic_parse_semafor.append((frame['target']['spans'][0]['text'], frame['target']['name'], frame['target']['spans'][0]['start']))
-                print(n, turn.user, turn.user_semantic_parse_semafor)
+                print('hhh', n, turn.user, turn.user_semantic_parse_semafor)
     else:
         print('Unknown parse type: {}'.format(args.type))
+    print('saving')
     dataset.save_dialogues(args.output)

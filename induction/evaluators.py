@@ -40,6 +40,10 @@ class GenericEvaluator:
     def add_turn(self, turn_slu, recognized, replace_request=False):
         slu_hyp = {}
         already_used_frames = set()
+        tps = 0
+        fps = 0
+        tns = 0
+        fns = 0
         for name, val in recognized:
             for substr, slot in self.eval_mapping.items():
                 if substr in name and not name in already_used_frames:
@@ -50,22 +54,28 @@ class GenericEvaluator:
                     break
 
         for gold_slot, gold_value in list(turn_slu.items()):
+                
             if gold_slot not in self.slot_evaluators:
                 continue
             if gold_slot not in slu_hyp:
                 self.slot_evaluators[gold_slot].fn += 1
+                fns += 1
                 continue
-            if slu_hyp[gold_slot].lower() in gold_value.lower():
+            if slu_hyp[gold_slot].lower() in gold_value.lower() or gold_value.lower() == 'slot':
                 self.slot_evaluators[gold_slot].tp += 1
+                tps += 1
                 del slu_hyp[gold_slot]
                 continue
             else:
                 self.slot_evaluators[gold_slot].fp += 1
+                fps += 1
                 del slu_hyp[gold_slot]
         for predicted_slot, predicted_value in slu_hyp.items():
             if predicted_slot not in self.slot_evaluators:
                 continue
             self.slot_evaluators[predicted_slot].fp += 1
+            fps += 1
+        return tps, fps, fns
 
     def eval(self, result):
         print(self.name, file=result)
@@ -129,7 +139,7 @@ camrest_eval_mapping = {
 carslu_eval_mapping = {
     'origin': 'food',
     'expensiveness': 'pricerange',
-    'locale_by_use': 'type',
+#    'locale_by_use': 'type',
     'direction': 'area',
     'contacting': 'slot',
     'quantity': 'slot',

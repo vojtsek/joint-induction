@@ -118,7 +118,6 @@ def augment_parser_numbers(parse, txt):
             last_number = normalize_num(tk)
         elif tk.lower() in inv_parse_dct:
             fr = inv_parse_dct[tk.lower()]
-            print('got', fr)
             if 'calendric' in fr and 'night' in tk and last_number is not None:
                 if fr in parse_dct:
                     del parse_dct[fr]
@@ -188,6 +187,7 @@ if __name__ == '__main__':
                     "use_capitalization": True,
                    }
     replace_request = False
+
     if args.domain == 'camrest':
         slot_names = ['food', 'pricerange', 'area', 'slot']
         eval_mapping = camrest_eval_mapping
@@ -208,7 +208,8 @@ if __name__ == '__main__':
         slot_names = ['food', 'pricerange', 'area', 'slot', 'type']
     elif args.domain == 'atis':
         eval_mapping = atis_eval_mapping
-        slot_names = ['depart_date.day_name', 'fromloc.city_name', 'airline_name', 'depart_time.period_mod', 'flight_mod', 'toloc.city_name']
+        #slot_names = ['depart_date.day_name', 'fromloc.city_name', 'airline_name', 'depart_time.period_mod', 'flight_mod', 'toloc.city_name']
+        slot_names = ['toloc.city_name','fromloc.city_name','depart_date.day_name','airline_name','depart_time.period_mod','flight_mod','depart_time.time_relative','arrive_date.month_name','arrive_date.day_number','meal','fromloc.state_code','connect','flight_days','toloc.airport_name','fromloc.state_name','airport_name','economy','aircraft_code','mod','airport_code','depart_time.start_time','depart_time.end_time','depart_date.year','restriction_code','arrive_time.start_time','toloc.airport_code','arrive_time.end_time','fromloc.airport_code','arrive_date.date_relative','return_date.date_relative','state_code','meal_code','day_name','period_of_day','stoploc.state_code','return_date.month_name','return_date.day_number','arrive_time.period_mod','toloc.country_name','days_code','return_time.period_of_day','time','today_relative','state_name','arrive_date.today_relative','return_time.period_mod','month_name','day_number','stoploc.airport_name','time_relative','return_date.today_relative','return_date.day_name']
     else:
         slot_names = []
         eval_mapping = {}
@@ -255,6 +256,8 @@ if __name__ == '__main__':
 
         model_evaluator = GenericEvaluator('NN MODEL', eval_mapping, slot_names)
         parser_evaluator = GenericEvaluator('PARSER', eval_mapping, slot_names)
+        model_better = {'tps': 0, 'fps': 0, 'fns': 0}
+        parser_better = {'tps': 0, 'fps': 0, 'fns': 0}
         for n, turn in enumerate(train_set):
             state = {}
             turn_slu = {}
@@ -271,17 +274,38 @@ if __name__ == '__main__':
             semantics.update(turn.user_semantic_parse_semafor)
             semantics = turn.semantics
             by_parser = augment_parser_numbers([(annotated_corpus._real_frame_name(f[1]), f[0]) for f in semantics if annotated_corpus._real_frame_name(f[1]) in annotated_corpus.selected_frames], turn.user)
-            print(turn.user, turn_slu, by_model, by_parser)
             by_model = sorted(by_model, key=lambda x: x[0])
             by_parser = sorted(by_parser, key=lambda x: x[0])
-            model_evaluator.add_turn(turn_slu, by_model, replace_request)
+            m_tps,m_fps,m_fns = model_evaluator.add_turn(turn_slu, by_model, replace_request)
             total += len(by_model)
-            parser_evaluator.add_turn(turn_slu, by_parser, replace_request)
+            p_tps,p_fps,p_fns = parser_evaluator.add_turn(turn_slu, by_parser, replace_request)
+            model_better['tps'] += int(m_tps > p_tps)
+            model_better['fps'] += int(m_fps < p_fps)
+            model_better['fns'] += int(m_fns > p_fns)
+            parser_better['tps'] += int(m_tps < p_tps)
+            parser_better['fps'] += int(m_fps > p_fps)
+            parser_better['fns'] += int(m_fns < p_fns)
+            if p_fns > m_fns or p_tps < m_tps or p_fps > m_fps:
+                print('User', turn.user)
+                print('SLU', turn_slu)
+                print('MODEL BETTER')
+                print('Model', by_model, m_tps, m_fps, m_fns)
+                print('Parser', by_parser, p_tps, p_fps, p_fns)
+                print('=' * 100)
+            elif p_fns > m_fns or p_tps > m_tps or p_fps < m_fps:
+                print('User', turn.user)
+                print('SLU', turn_slu)
+                print('PARSER BETTER')
+                print('Model', by_model, m_tps, m_fps, m_fns)
+                print('Parser', by_parser, p_tps, p_fps, p_fns)
+                print('=' * 100)
             if n % 30 == 0:
                 model_evaluator.eval(sys.stdout)
                 parser_evaluator.eval(sys.stdout)
-        print('writing results')
         print('TOTAL RECOGNIZED', total)
+        print(model_better)
+        print(parser_better)
+        print('writing results')
         with open(args.result_file, 'wt') as of:
             model_evaluator.eval(of)
             parser_evaluator.eval(of)

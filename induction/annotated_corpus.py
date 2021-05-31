@@ -10,6 +10,14 @@ import yake
 import networkx as nx
 import numpy as np
 
+carslu_eval_mapping = {
+    'origin': 'food',
+    'expensiveness': 'pricerange',
+    'direction': 'area',
+    'contacting': 'slot',
+    'quantity': 'slot',
+    'topic': 'slot'
+}
 class SemanticFrame:
 
     def __init__(self, name):
@@ -119,13 +127,16 @@ class AnnotatedCorpus:
         for t in turns:
             turn_text = t.user
             if not hasattr(t, 'semantics'):
-                if hasattr(t,' user_semantic_parse_sesame'):
+                if hasattr(t,'user_semantic_parse_sesame'):
                     semantics = set(t.user_semantic_parse_sesame)
                 else:
                     semantics = set()
-                semantics.update(t.user_semantic_parse_semafor)
-               # semantics.update([(f[0], f[1][0].upper() + f[1][1:], f[2]) for f in t.ner])
+                if hasattr(t,'user_semantic_parse_semafor'):
+                    semantics.update(t.user_semantic_parse_semafor)
+                if hasattr(t,'ner'):
+                    semantics.update([(f[0], f[1][0].upper() + f[1][1:], f[2]) for f in t.ner])
                 t.semantics = semantics
+            print(t.semantics)
             dep_parse = t.user_dependency_parse
             if replace_srl:
                 self._filter_out_turn_frames(t)
@@ -181,7 +192,8 @@ class AnnotatedCorpus:
             kw_based_order = []
         else:
             kw_based_order, _ = zip(*keywords_frames_only)
-        for ordering in [graph_based_order, coherence_based_order, frq_based_order]:
+#graph_based_order
+        for ordering in [graph_based_order, frq_based_order, coherence_based_order]:
             if len(ordering) != len(self.frames_dict):
                 for fr in self.frames_dict:
                     if fr not in ordering:
@@ -298,8 +310,16 @@ class AnnotatedCorpus:
                 for tk_raw, tk_parsed in zip(raw.split(), parsed.split()):
                     tk_raw = tk_raw.strip('!?.,')
                     tk_parsed = tk_parsed.strip('!?.,').lower()
-                    tag_type =  'I' if tk_parsed == last_tk else 'B'
-                    if tk_parsed in self.frames_dict:
+                    for our, final in carslu_eval_mapping.items():
+                        if our in tk_parsed:
+                            tk_parsed = final
+                            break
+                    else:
+                        tk_parsed = 'out'
+                    # tag_type =  'I' if tk_parsed == last_tk else 'B'
+                    tag_type = 'B'
+                    #if tk_parsed in self.frames_dict:
+                    if tk_parsed in carslu_eval_mapping.values():
                         tag = '{}-{}'.format(tag_type, tk_parsed)
                     else:
                         tag = 'O'
@@ -309,7 +329,10 @@ class AnnotatedCorpus:
 
     def get_corpus_srl_iob(self, out_dir, turns, train_len, selected=None):
         def rank_f(turn):
-            semantics = set(turn.user_semantic_parse_semafor + turn.user_semantic_parse_sesame)
+            if hasattr(turn,' user_semantic_parse_semafor'):
+                semantics = set(turn.user_semantic_parse_semafor + turn.user_semantic_parse_sesame)
+            else:
+                semantics = set(turn.user_semantic_parse_sesame)
             return len([f for f in semantics if self._real_frame_name(f[1]).lower() in self.selected_frames])
 
         count = 0
@@ -334,7 +357,15 @@ class AnnotatedCorpus:
                     tk_raw = tk_raw.strip('!?.,')
                     tk_parsed = tk_parsed.strip('!?.,').lower()
                     tag_type =  'I' if tk_parsed == last_tk else 'B'
+                    #for our, final in carslu_eval_mapping.items():
+                    #    if our in tk_parsed:
+                    #        tk_parsed = final
+                    #        break
+                    #else:
+                    #    tk_parsed = 'out'
+                    #tag_type = 'B'
                     if self._real_frame_name(tk_parsed) in selected:
+                    #if tk_parsed in carslu_eval_mapping.values():
                         tag = '{}-{}'.format(tag_type, self._real_frame_name(tk_parsed))
                     else:
                         tag = 'O'
